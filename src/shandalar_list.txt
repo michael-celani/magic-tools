@@ -522,7 +522,7 @@
 .552	Acid Rain
 .553	Active Volcano
 .554	Adun Oakenshield
-.556	Ærathi Berserker
+.556	Aerathi Berserker
 .558	Akron Legionnaire
 .559	Al-abara's Carpet
 .560	Alabaster Potion
@@ -1473,7 +1473,7 @@
 .1737	Wurm's Tooth
 .1738	Ancestor's Chosen
 .1739	Somber Hoverguard
-.1740	Frozen Æther
+.1740	Frozen Aether
 .1741	Thoughtcast
 .1743	Fists of the Anvil
 .1744	Charging Troll
@@ -1750,7 +1750,7 @@
 .2176	Anaba Ancestor
 .2177	Anaba Bodyguard
 .2178	Apocalypse Chime
-.2179	Æther Storm
+.2179	Aether Storm
 .2181	Aysen Bureaucrats
 .2182	Aysen Highway
 .2183	Baki's Curse
@@ -2255,7 +2255,7 @@
 .2932	Arctic Wolves
 .2933	Argivian Find
 .2934	Argivian Restoration
-.2935	Æther Flash
+.2935	Aether Flash
 .2936	Aura of Silence
 .2937	Avizoa
 .2938	Barishi
@@ -2960,7 +2960,7 @@
 .3919	Stroke of Genius
 .3921	Sunder
 .3922	Symbiosis
-.3923	Tainted Æther
+.3923	Tainted Aether
 .3925	Thran Quarry
 .3927	Titania's Boon
 .3928	Titania's Chosen
@@ -3093,7 +3093,7 @@
 .4092	Apprentice Necromancer
 .4094	Attrition
 .4095	Aura Thief
-.4096	Æther Sting
+.4096	Aether Sting
 .4097	Blizzard Elemental
 .4098	Body Snatcher
 .4099	Braidwood Cup
@@ -3926,7 +3926,7 @@
 .5327	Volcano Imp
 .5330	Ana Sanctuary
 .5332	Angelfire Crusader
-.5333	Æther Mutation
+.5333	Aether Mutation
 .5334	Battlefield Forge
 .5335	Bloodfire Colossus
 .5336	Bloodfire Dwarf
@@ -4010,7 +4010,7 @@
 .5465	Afflict
 .5466	Amugaba
 .5469	Ashen Firebeast
-.5470	Æther Burst
+.5470	Aether Burst
 .5471	Atogatog
 .5472	Aura Graft
 .5473	Auramancer
@@ -4366,7 +4366,7 @@
 .6049	Aphetto Vulture
 .6050	Arcanis the Omnipotent
 .6053	Astral Slide
-.6054	Æther Charge
+.6054	Aether Charge
 .6055	Aura Extraction
 .6056	Aurification
 .6057	Avarax
@@ -4648,7 +4648,7 @@
 .6611	Altar's Light
 .6612	Arc-Slogger
 .6613	Assert Authority
-.6614	Æther Spellbomb
+.6614	Aether Spellbomb
 .6615	Auriok Bladewarden
 .6617	Auriok Transfixer
 .6619	Banshee's Blade
@@ -4817,8 +4817,8 @@
 .6852	Arcbound Slith
 .6853	Arcbound Stinger
 .6854	Arcbound Worker
-.6855	Æther Snap
-.6856	Æther Vial
+.6855	Aether Snap
+.6856	Aether Vial
 .6857	Auriok Glaivemaster
 .6862	Burden of Greed
 .6863	Carry Away
@@ -5285,7 +5285,7 @@
 .7599	Akki Underling
 .7601	Araba Mothrider
 .7602	Arashi, the Sky Asunder
-.7604	Æther Shockwave
+.7604	Aether Shockwave
 .7608	Bounteous Kirin
 .7609	Briarknit Kami
 .7610	Burning-Eye Zubera
@@ -6116,7 +6116,7 @@
 .9039	Tarox Bladewing
 .9040	Thornweald Archer
 .9042	Tolaria West
-.9046	Vedalken Æthermage
+.9046	Vedalken Aethermage
 .9047	Veilstone Amulet
 .9049	Venser, Shaper Savant
 .9053	Witch's Mist
@@ -6912,7 +6912,7 @@
 .10199	Scepter of Dominance
 .10200	Scepter of Fugue
 .10201	Scepter of Insight
-.10202	Scornful Æther-Lich
+.10202	Scornful Aether-Lich
 .10203	Sedraxis Alchemist
 .10206	Sigil of the Empty Throne
 .10207	Skyward Eye Prophets
@@ -7307,7 +7307,7 @@
 .10719	Akoum Battlesinger
 .10721	Anowon, the Ruin Sage
 .10723	Arbor Elf
-.10725	Æther Tradewinds
+.10725	Aether Tradewinds
 .10726	Avenger of Zendikar
 .10727	Basilisk Collar
 .10728	Battle Hurda
@@ -7563,7 +7563,7 @@
 .11090	Arc Runner
 .11091	Armored Cancrix
 .11092	Assault Griffin
-.11093	Æther Adept
+.11093	Aether Adept
 .11094	Augury Owl
 .11096	Back to Nature
 .11097	Barony Vampire
@@ -8836,7 +8836,7 @@
 .12873	Worldspine Wurm
 .12875	Adaptive Snapjaw
 .12876	Aerial Maneuver
-.12877	Ætherize
+.12877	Aetherize
 .12878	Agoraphobia
 .12879	Alms Beast
 .12881	Angelic Edict
@@ -9011,7 +9011,7 @@
 .13107	Zarichi Tiger
 .13108	Zhur-Taa Swine
 .13109	Advent of the Wurm
-.13110	Ætherling
+.13110	Aetherling
 .13113	Armored Wolf-Rider
 .13114	Ascended Lawmage
 .13118	Bane Alley Blackguard
@@ -9482,7 +9482,7 @@
 .13822	Thassa's Rebuff
 .13823	Thunder Brute
 .13824	Thunderous Might
-.13826	Unravel the Æther
+.13826	Unravel the Aether
 .13827	Vanguard of Brimaz
 .13829	Warchanter of Mogis
 .13830	Weight of the Underworld
@@ -9864,7 +9864,7 @@
 .14433	Wingmate Roc
 .14434	Winterflame
 .14437	Zurgo Helmsmasher
-.14438	Æther Gale
+.14438	Aether Gale
 .14439	Angel of the Dire Hour
 .14443	Benevolent Offering
 .14445	Breaching Leviathan
@@ -10119,7 +10119,7 @@
 .15073	Akroan Sergeant
 .15076	Alhammarret, High Arbiter
 .15077	Ampryn Tactician
-.15078	Anchor to the Æther
+.15078	Anchor to the Aether
 .15080	Anointer of Champions
 .15082	Artificer's Epiphany
 .15083	Aspiring Aeronaut
@@ -10158,7 +10158,7 @@
 .15130	Firefiend Elemental
 .15133	Gather the Pack
 .15134	Ghirapur Gearcrafter
-.15135	Ghirapur Æther Grid
+.15135	Ghirapur Aether Grid
 .15136	Gideon's Phalanx
 .15141	Graveblade Marauder
 .15142	Guardian Automaton
