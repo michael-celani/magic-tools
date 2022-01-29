@@ -1,11 +1,7 @@
-from multiprocessing import AuthenticationError
 import requests
 import urllib.parse
 import dateutil.parser
 from datetime import datetime, timezone
-
-# https://api.moxfield.com/v2/cards/search
-
 
 class MoxfieldAuth(requests.auth.AuthBase):
 
@@ -59,15 +55,33 @@ class MoxfieldAuth(requests.auth.AuthBase):
         return r
 
 
-class Decks:
+class MoxfieldDeck:
 
-    def set_mainboard(self, public_id, card_id, card_amount):
-        deck = self.get(public_id)
+    def bulk_edit(self, mainboard, sideboard, maybeboard):
+        public_id = urllib.parse.quote(self.public_id, safe='')
+        headers = {
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.5',
+        }
+        json = {
+            "mainboard":'\n'.join(f'{value} {key}' for key, value in mainboard.items()),
+            "sideboard":'\n'.join(f'{value} {key}' for key, value in sideboard.items()),
+            "maybeboard":'\n'.join(f'{value} {key}' for key, value in maybeboard.items()),
+            "playStyle":"paperDollars",
+            "pricingProvider":"tcgplayer"
+        }
+        url = f'https://api.moxfield.com/v2/decks/{public_id}/bulk-edit'
+        r = self.session.put(url, json=json, headers=headers)
+        return r.json()
+
+
+    def set_mainboard(self, card_id, card_amount):
+        deck = self.get()
         deck_id = deck['id']
         deck_mainboard = deck['mainboard']
 
         value = 0
-        for obj in deck['mainboard'].values():
+        for obj in deck_mainboard.values():
             if obj['card']['id'] == card_id:
                 value = obj['quantity']
 
@@ -92,12 +106,17 @@ class Decks:
             url = f'https://api.moxfield.com/v2/decks/{deck_id}/cards/mainboard/{url_card_id}'
             self.session.put(url, json=json, headers=headers)
 
-    def get(self, public_id):
-        public_id = urllib.parse.quote(public_id, safe='')
+    def get(self):
+        public_id = urllib.parse.quote(self.public_id, safe='')
         r = self.session.get(
             f'https://api.moxfield.com/v2/decks/all/{public_id}')
+        
+        if r.status_code != 200:
+            raise Exception()
+
         return r.json()
 
-    def __init__(self, session):
+    def __init__(self, public_id, session):
+        self.public_id = public_id
         self.session = session
         pass
