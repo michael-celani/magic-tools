@@ -5,9 +5,8 @@ from datetime import datetime, timezone
 
 class MoxfieldAuth(requests.auth.AuthBase):
 
-    @staticmethod
-    def login(username, password):
-        payload = {'userName': username, 'password': password}
+    def __login(self):
+        payload = {'userName': self.__username, 'password': self.__password}
         headers = {
             'Accept': 'application/json, text/plain, */*',
             'Accept-Language': 'en-US,en;q=0.5',
@@ -17,10 +16,9 @@ class MoxfieldAuth(requests.auth.AuthBase):
             'https://api.moxfield.com/v1/account/token', json=payload, headers=headers)
 
         if r.status_code != 200:
-            raise ValueError('incorrect password')
+            raise ValueError('bad login')
 
-        resp_json = r.json()
-        return MoxfieldAuth(resp_json['access_token'], resp_json['refresh_token'], dateutil.parser.parse(resp_json['expiration']))
+        self.__update(r.json())
 
     def __refresh(self):
         payload = {'refreshToken': self.refresh_token}
@@ -33,20 +31,27 @@ class MoxfieldAuth(requests.auth.AuthBase):
             'https://api.moxfield.com/v1/account/token/refresh', json=payload, headers=headers)
 
         if r.status_code != 200:
-            raise ValueError('bad refresh')
+            self.__login()
 
-        resp_json = r.json()
-        self.access_token = resp_json['access_token']
-        self.refresh_token = resp_json['refresh_token']
-        self.expiration = dateutil.parser.parse(resp_json['expiration'])
+        self.__update(r.json())
 
-    def __init__(self, access_token: str, refresh_token: str, expiration: datetime):
-        self.access_token = access_token
-        self.refresh_token = refresh_token
-        self.expiration = expiration
+    def __update(self, ref_json):
+        self.access_token = ref_json['access_token']
+        self.refresh_token = ref_json['refresh_token']
+        self.expiration = dateutil.parser.parse(ref_json['expiration'])
+
+    def __init__(self, username: str, password: str):
+        self.access_token = None
+        self.refresh_token = None
+        self.expiration = None
+        self.__username = username
+        self.__password = password
 
     def __call__(self, r):
-        if datetime.now(timezone.utc) > self.expiration:
+        if self.expiration is None:
+            self.__login()
+
+        elif datetime.now(timezone.utc) > self.expiration:
             self.__refresh()
 
         r.headers['Authorization'] = f'Bearer {self.access_token}'
@@ -54,6 +59,35 @@ class MoxfieldAuth(requests.auth.AuthBase):
         r.headers['Referrer'] = 'https://www.moxfield.com'
         return r
 
+class MoxfieldSearch:
+
+    def search(self, fmt, filt):
+        fmt = urllib.parse.quote(fmt, safe='')
+        filt = urllib.parse.quote(filt, safe='')
+        headers = {
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.5',
+        }
+        params = {
+            'pageNumber': 1,
+            'pageSize': 64,
+            'sortType': 'updated',
+            'sortDirection': 'Descending',
+            'fmt': fmt,
+            'filter': filt
+        }
+        r = self.session.get(f'https://api.moxfield.com/v2/decks/search', params=params, headers=headers)
+        data = r.json()
+        for pageNumber in range(2, data['totalPages'] + 1):
+            for obj in data['data']:
+                yield MoxfieldDeck(obj['publicId'], self.session)
+            
+            params['pageNumber'] = pageNumber
+            r = self.session.get(f'https://api.moxfield.com/v2/decks/search', params=params, headers=headers)
+            data = r.json()
+
+    def __init__(self, session):
+        self.session = session
 
 class MoxfieldDeck:
 

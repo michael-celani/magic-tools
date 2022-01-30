@@ -2,31 +2,29 @@ import os
 import discord
 import tempfile
 import requests
+from thefuzz import fuzz, process
 from discord.ext import commands
 from dotenv import load_dotenv
 from moxfield import MoxfieldAuth, MoxfieldDeck
-from card_collection import CardCollection, CardRecord
-from shandalar import shandalarize
+from shandalar import ShandalarContext
 
 # Load environment variables.
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 MOXFIELD_USERNAME = os.getenv('MOXFIELD_USERNAME')
-MOXFIELD_PASSWORD=os.getenv('MOXFIELD_PASSWORD')
-MOXFIELD_HANGMAN_SOURCE=os.getenv('MOXFIELD_HANGMAN_SOURCE')
-MOXFIELD_HANGMAN_TARGET=os.getenv('MOXFIELD_HANGMAN_TARGET')
-
-print(MOXFIELD_HANGMAN_TARGET)
+MOXFIELD_PASSWORD = os.getenv('MOXFIELD_PASSWORD')
+MOXFIELD_HANGMAN_SOURCE = os.getenv('MOXFIELD_HANGMAN_SOURCE')
+MOXFIELD_HANGMAN_TARGET = os.getenv('MOXFIELD_HANGMAN_TARGET')
 
 # Authenticate with Moxfield.
 session = requests.Session()
-session.auth = MoxfieldAuth.login(MOXFIELD_USERNAME, MOXFIELD_PASSWORD)
+session.auth = MoxfieldAuth(MOXFIELD_USERNAME, MOXFIELD_PASSWORD)
 hangman_source = MoxfieldDeck(MOXFIELD_HANGMAN_SOURCE, session)
 hangman_target = MoxfieldDeck(MOXFIELD_HANGMAN_TARGET, session)
 hangman_source_deck = hangman_source.get()
 
 # Load the data.
-cards = CardCollection.load('./shandalar_data.tsv')
+cards = ShandalarContext.load('./shandalar_data.tsv')
 moxfield_cards = {}
 with open('./moxfield_ids.tsv') as moxfield_data:
     for line in moxfield_data:
@@ -37,28 +35,34 @@ with open('./moxfield_ids.tsv') as moxfield_data:
 client = discord.Client()
 bot = commands.Bot(command_prefix='!')
 
-@bot.command(name='hangman_list', help='Gets the current hangman deck.')
-async def hangman_deck(ctx):
-    if MOXFIELD_HANGMAN_SOURCE is None:
+
+def is_hangman_enabled():
+    return MOXFIELD_HANGMAN_SOURCE is not None
+
+@bot.command(name='hg', help='Guesses a card in Hangman.')
+async def guess(ctx, command: str, *args):
+    if not is_hangman_enabled():
         await ctx.send("Commander Hangman isn't currently enabled.")
         return
 
-    embed = discord.Embed(title='Commander Hangman', description= 'The current list of guesses for Commander Hangman.', url=f'https://www.moxfield.com/decks/{MOXFIELD_HANGMAN_TARGET}')
-    await ctx.send(embed=embed)
+    if command == 'list':
+        embed = discord.Embed(
+            title='Commander Hangman',
+            description='The current list of guesses for Commander Hangman.',
+            url=f'https://www.moxfield.com/decks/{MOXFIELD_HANGMAN_TARGET}')
+        await ctx.send(embed=embed)
 
-@bot.command(name='hangman_guess', help='Guesses a card in Hangman.')
-async def guess(ctx, card_name: str):
-    # Check if hangman is enabled.
-    if MOXFIELD_HANGMAN_SOURCE is None:
-        await ctx.send("Commander Hangman isn't currently enabled.")
-        await ctx.message.add_reaction('❌')
+    if command != 'guess':
         return
+
+    card_name = ' '.join(args)
 
     # Check if it's a card name.
     if card_name not in moxfield_cards:
-        await ctx.send("Your guess wasn't a Magic: the Gathering card. Capitalization matters, and if it's multiple words, use quotes!")
-        await ctx.message.add_reaction('❌')
-        return
+        new_card_name = process.extractOne(card_name, moxfield_cards.keys(), scorer=fuzz.token_sort_ratio)[0]
+        if new_card_name.lower() != card_name.lower():
+            await ctx.send(f'Guessing closest card: "{new_card_name}"')
+        card_name = new_card_name
 
     # Check the source for the card name.
     if card_name not in hangman_source_deck['mainboard']:
@@ -71,32 +75,38 @@ async def guess(ctx, card_name: str):
     hangman_target.set_mainboard(moxfield_id, quantity)
     await ctx.message.add_reaction('✅')
 
-@bot.command(name='shandalarize', help='Shandalarizes a decklist from Moxfield.')
-async def shandalar(ctx, public_id: str):
-    body = {'moxfield': [public_id]}
-    response = shandalarize(body, cards, session)
 
-    if len(response['errors']['moxfield']) != 0:
-        await ctx.send("There was an error downloading the Moxfield deck.")
+@bot.command(name='shandalarize', help='Shandalarizes a decklist from Moxfield.')
+async def shandalar(ctx, deck_site: str, public_id: str):
+    lines, errors = None, None
+
+    if deck_site.lower() == 'moxfield':
+        try:
+            lines, errors = shandalarize_moxfield(public_id)
+        except:
+            await ctx.send("There was an error getting the deck from Moxfield.")
+            return
+    else:
+        await ctx.send(f"The deck site '{deck_site}' is not currently supported.")
         return
 
-    for deck_id, deck in response['decks']['moxfield'].items():
-        lines = 0
+    if len(lines) != 0:
         with tempfile.NamedTemporaryFile('w', encoding="utf-8", delete=True) as fi:
-            for card, card_line in deck['cards'].items():
-                fi.write(card_line + "\n")
-                lines += 1
+            fi.writelines(lines)
             fi.flush()
-            if lines != 0:
-                await ctx.send(file=discord.File(fi.name, "deck.dck"))
+            await ctx.send(file=discord.File(fi.name, 'deck.dck'))
 
-        lines = 0
+    if len(errors) != 0:
         with tempfile.NamedTemporaryFile('w', encoding="utf-8", delete=True) as err:
-            for card, error_line in deck['errors'].items():
-                err.write(card + ": " + error_line + "\n")
-                lines += 1
+            err.writelines(errors)
             err.flush()
-            if lines != 0:
-                await ctx.send(file=discord.File(err.name, "errors.txt"))
+            await ctx.send(file=discord.File(err.name, 'errors.txt'))
+
+def shandalarize_moxfield(public_id: str):
+    # Get the Moxfield deck:
+    deck = MoxfieldDeck(public_id, session).get()
+    mainboard = {card.split('//')[0].strip() : card_info['quantity'] for card, card_info in deck['mainboard'].items()}
+    print(mainboard)
+    return cards.convert(mainboard)
 
 bot.run(TOKEN)
