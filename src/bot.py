@@ -13,15 +13,13 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 MOXFIELD_USERNAME = os.getenv('MOXFIELD_USERNAME')
 MOXFIELD_PASSWORD = os.getenv('MOXFIELD_PASSWORD')
-MOXFIELD_HANGMAN_SOURCE = os.getenv('MOXFIELD_HANGMAN_SOURCE')
-MOXFIELD_HANGMAN_TARGET = os.getenv('MOXFIELD_HANGMAN_TARGET')
 
 # Authenticate with Moxfield.
 session = requests.Session()
 session.auth = MoxfieldAuth(MOXFIELD_USERNAME, MOXFIELD_PASSWORD)
-hangman_source = MoxfieldDeck(MOXFIELD_HANGMAN_SOURCE, session)
-hangman_target = MoxfieldDeck(MOXFIELD_HANGMAN_TARGET, session)
-hangman_source_deck = hangman_source.get()
+hangman_source = None
+hangman_target = None
+hangman_source_deck = None
 
 # Load the data.
 cards = ShandalarContext.load('./shandalar_data.tsv')
@@ -37,10 +35,22 @@ bot = commands.Bot(command_prefix='!')
 
 
 def is_hangman_enabled():
-    return MOXFIELD_HANGMAN_SOURCE is not None
+    return hangman_source is not None
 
 @bot.command(name='hg', help='Guesses a card in Hangman.')
 async def guess(ctx, command: str, *args):
+    if command == 'set':
+        if ctx.message.author.guild_permissions.administrator:
+            source, target = args
+            global hangman_source, hangman_target, hangman_source_deck
+            hangman_source = MoxfieldDeck(source, session)
+            hangman_target = MoxfieldDeck(target, session)
+            hangman_source_deck = hangman_source.get()
+            await ctx.send("Hangman set.")
+        else:
+            await ctx.send("Invalid permissions.")
+        return
+
     if not is_hangman_enabled():
         await ctx.send("Commander Hangman isn't currently enabled.")
         return
@@ -49,7 +59,7 @@ async def guess(ctx, command: str, *args):
         embed = discord.Embed(
             title='Commander Hangman',
             description='The current list of guesses for Commander Hangman.',
-            url=f'https://www.moxfield.com/decks/{MOXFIELD_HANGMAN_TARGET}')
+            url=f'https://www.moxfield.com/decks/{hangman_target.public_id}')
         await ctx.send(embed=embed)
 
     if command != 'guess':
