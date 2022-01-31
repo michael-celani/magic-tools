@@ -22,9 +22,9 @@ hangman_target = None
 hangman_source_deck = None
 
 # Load the data.
-cards = ShandalarContext.load('./shandalar_data.tsv')
+cards = ShandalarContext.load('./data/shandalar_data.tsv')
 moxfield_cards = {}
-with open('./moxfield_ids.tsv') as moxfield_data:
+with open('./data/moxfield_ids.tsv') as moxfield_data:
     for line in moxfield_data:
         data = line.split('\t')
         moxfield_cards[data[0]] = data[1]
