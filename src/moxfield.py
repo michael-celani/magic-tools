@@ -2,6 +2,7 @@ import requests
 import urllib.parse
 import dateutil.parser
 from datetime import datetime, timezone
+from uuid import uuid4
 
 class MoxfieldAuth(requests.auth.AuthBase):
 
@@ -85,6 +86,36 @@ class MoxfieldSearch:
             params['pageNumber'] = pageNumber
             r = self.session.get(f'https://api.moxfield.com/v2/decks/search', params=params, headers=headers)
             data = r.json()
+
+    def __init__(self, session):
+        self.session = session
+
+class MoxfieldDeckFactory:
+
+    def create(self, name=None, deck=None, format='none', visibility='public'):
+        if name is None:
+            name = str(uuid4())
+        if deck is None:
+            deck = {}
+
+        payload = {
+            'name': name,
+            'format': format,
+            'visibility': visibility,
+            'importText': '\n'.join(f'{val} {key}' for key, val in deck.items()),
+            'playStyle': 'paperDollars',
+            'pricingProvider': 'tcgplayer'
+        }
+
+        headers = {
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Content-Type': 'application/json'
+        }
+        url = 'https://api.moxfield.com/v2/decks'
+
+        r = self.session.post(url, json=payload, headers=headers)
+        return MoxfieldDeck(r.json()['publicId'], self.session)
 
     def __init__(self, session):
         self.session = session
