@@ -5,7 +5,8 @@ import requests
 from thefuzz import fuzz, process
 from discord.ext import commands
 from dotenv import load_dotenv
-from moxfield import MoxfieldAuth, MoxfieldDeck
+from moxfield.auth import MoxfieldAuth
+from moxfield.decks import MoxfieldSpecificDeckAPI
 from shandalar import ShandalarContext
 
 # Load environment variables.
@@ -43,8 +44,8 @@ async def guess(ctx, command: str, *args):
         if ctx.message.author.guild_permissions.administrator:
             source, target = args
             global hangman_source, hangman_target, hangman_source_deck
-            hangman_source = MoxfieldDeck(source, session)
-            hangman_target = MoxfieldDeck(target, session)
+            hangman_source = MoxfieldSpecificDeckAPI(source, session)
+            hangman_target = MoxfieldSpecificDeckAPI(target, session)
             hangman_source_deck = hangman_source.get()
             await ctx.send("Hangman set.")
         else:
@@ -114,7 +115,7 @@ async def shandalar(ctx, deck_site: str, public_id: str):
 
 def shandalarize_moxfield(public_id: str):
     # Get the Moxfield deck:
-    deck = MoxfieldDeck(public_id, session).get()
+    deck = MoxfieldSpecificDeckAPI(public_id, session).get()
     mainboard = {card.split('//')[0].strip() : card_info['quantity'] for card, card_info in deck['mainboard'].items()}
     print(mainboard)
     return cards.convert(mainboard)
