@@ -2,12 +2,13 @@ import os
 import discord
 import tempfile
 import requests
-from thefuzz import fuzz, process
 from discord.ext import commands
 from dotenv import load_dotenv
 from moxfield.auth import MoxfieldAuth
 from moxfield.decks import MoxfieldSpecificDeckAPI
+from moxfield.search import MoxfieldSearchAPI
 from shandalar import ShandalarContext
+from hangman import CommanderHangman, CommanderHangmanStats
 
 # Load environment variables.
 load_dotenv()
@@ -18,41 +19,61 @@ MOXFIELD_PASSWORD = os.getenv('MOXFIELD_PASSWORD')
 # Authenticate with Moxfield.
 session = requests.Session()
 session.auth = MoxfieldAuth(MOXFIELD_USERNAME, MOXFIELD_PASSWORD)
-hangman_source = None
-hangman_target = None
-hangman_source_deck = None
+hangman_stats = CommanderHangmanStats('./data/stats.db')
+hangman_session = None
 
 # Load the data.
 cards = ShandalarContext.load('./data/shandalar_data.tsv')
-moxfield_cards = {}
-with open('./data/moxfield_ids.tsv') as moxfield_data:
-    for line in moxfield_data:
-        data = line.split('\t')
-        moxfield_cards[data[0]] = data[1]
 
 # Load the discord client.
 client = discord.Client()
-bot = commands.Bot(command_prefix='!')
-
-
-def is_hangman_enabled():
-    return hangman_source is not None
+bot = commands.Bot(command_prefix='!', intents=discord.Intents.default())
 
 @bot.command(name='hg', help='Guesses a card in Hangman.')
 async def guess(ctx, command: str, *args):
+    
     if command == 'set':
         if ctx.message.author.guild_permissions.administrator:
             source, target = args
-            global hangman_source, hangman_target, hangman_source_deck
-            hangman_source = MoxfieldSpecificDeckAPI(source, session)
-            hangman_target = MoxfieldSpecificDeckAPI(target, session)
-            hangman_source_deck = hangman_source.get()
+            global hangman_session
+            hangman_session = CommanderHangman(session, source, target, hangman_stats)
             await ctx.send("Hangman set.")
         else:
             await ctx.send("Invalid permissions.")
         return
 
-    if not is_hangman_enabled():
+    if command == 'stats':
+        mentions = list(ctx.message.mentions)
+
+        if len(mentions) > 0:
+            user = mentions[0]
+        else:
+            user = ctx.message.author
+
+        stats = hangman_stats.get_player_stats(user.id, None if hangman_session is None else hangman_session.hangman_source.public_id)
+        desc = f'Commander Hangman statistics for user {user.name}'
+
+        if hangman_session is not None:
+            deck_name = hangman_session.hangman_source_deck['name']
+            desc = desc + f" (Deck: '{deck_name}')"
+
+        embed = discord.Embed(
+            title = f'Commander Hangman Stats: {user.name}',
+            description=desc
+        )
+        
+        embed.add_field(name="Total Guesses", value=stats['all_time'])
+        embed.add_field(name="Total Correct", value=stats['all_time_correct'])
+        embed.add_field(name="Total Correct %", value=round(100.0 * stats['all_time_correct'] / max(1, stats['all_time']), 2))
+
+        if hangman_session is not None:
+            embed.add_field(name="Current Deck Guesses", value=stats['current'])
+            embed.add_field(name="Current Deck Correct", value=stats['current_correct'])
+            embed.add_field(name="Current Deck Correct %", value=round(100.0 * stats['current_correct'] / max(1, stats['current']), 2))
+        await ctx.send(embed=embed)
+        return
+
+    if hangman_session is None:
         await ctx.send("Commander Hangman isn't currently enabled.")
         return
 
@@ -60,31 +81,32 @@ async def guess(ctx, command: str, *args):
         embed = discord.Embed(
             title='Commander Hangman',
             description='The current list of guesses for Commander Hangman.',
-            url=f'https://www.moxfield.com/decks/{hangman_target.public_id}')
+            url=f'https://www.moxfield.com/decks/{hangman_session.hangman_target.public_id}')
         await ctx.send(embed=embed)
+        return
 
     if command != 'guess':
         return
 
-    card_name = ' '.join(args)
+    query = ' '.join(args)
+    guess_results = hangman_session.guess(ctx.message.author.id, query)
 
-    # Check if it's a card name.
-    if card_name not in moxfield_cards:
-        new_card_name = process.extractOne(card_name, moxfield_cards.keys(), scorer=fuzz.token_sort_ratio)[0]
-        if new_card_name.lower() != card_name.lower():
-            await ctx.send(f'Guessing closest card: "{new_card_name}"')
-        card_name = new_card_name
-
-    # Check the source for the card name.
-    if card_name not in hangman_source_deck['mainboard']:
+    if guess_results['guess_correct']:
+        await ctx.message.add_reaction('✅')
+    else:
         await ctx.message.add_reaction('❌')
+
+    if not guess_results['guess_unique']:
+        await ctx.message.add_reaction('⁉️')
+
+    if guess_results['card_name'] is None:
+        await ctx.send('No card matching the query found.')
         return
 
-    # Update deck.
-    moxfield_id = moxfield_cards[card_name]
-    quantity = hangman_source_deck['mainboard'][card_name]['quantity']
-    hangman_target.set_mainboard(moxfield_id, quantity)
-    await ctx.message.add_reaction('✅')
+    card_name = guess_results['card_name']
+
+    if guess_results['card_name'].lower() != query.lower():
+        await ctx.send(f'Guessed closest card: "{card_name}"')    
 
 
 @bot.command(name='shandalarize', help='Shandalarizes a decklist from Moxfield.')
