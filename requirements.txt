@@ -6,7 +6,7 @@ chardet==4.0.0
 charset-normalizer==2.0.11
 discord.py==1.7.3
 idna==3.3
-moxfield==0.3.0
+moxfield==0.4.2
 multidict==6.0.2
 python-dateutil==2.8.2
 python-dotenv==0.19.2

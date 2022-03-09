@@ -1,12 +1,15 @@
-from moxfield.auth import MoxfieldAuth
 from moxfield.decks import MoxfieldSpecificDeckAPI
 from moxfield.search import MoxfieldSearchAPI
 import sqlite3
-import requests
+import itertools
+
+def guild_stats_path(guild_id):
+    return f"./data/{int(guild_id)}.db"
 
 class CommanderHangman:
 
     def guess(self, discord_id, query):
+        stats_path = guild_stats_path(self.guild_id)
         card = self.__get_card(query)
 
         if card is None:
@@ -19,13 +22,15 @@ class CommanderHangman:
         card_id = card['id']
         card_name = card['name']
         
-        hangman_target_deck = self.hangman_target.get()
-        guess_unique = not (card_name in hangman_target_deck['mainboard'] or card_name in hangman_target_deck['maybeboard'])
+        guess_unique = not (card_name in self.hangman_target_deck['mainboard'] or card_name in self.hangman_target_deck['maybeboard'])
         
         if card_name not in self.hangman_source_deck['mainboard']:
             if guess_unique:
                 self.hangman_target.maybeboard.set(card_id, 1)
-                self.stats.add(discord_id, self.hangman_source.public_id, card_id, False)
+                self.hangman_target_deck['maybeboard'][card_name] = {}
+
+                with CommanderHangmanStats(stats_path) as stats:
+                    stats.add(discord_id, self.hangman_source.public_id, card_id, False)
 
             return {
                 "card_name": card_name,
@@ -37,7 +42,11 @@ class CommanderHangman:
         if guess_unique:
             quantity = self.hangman_source_deck['mainboard'][card_name]['quantity']
             self.hangman_target.mainboard.set(card_id, quantity)
-            self.stats.add(discord_id, self.hangman_source.public_id, card_id, True)
+            self.hangman_target_deck['mainboard'][card_name] = {}
+
+            with CommanderHangmanStats(stats_path) as stats:
+                stats.add(discord_id, self.hangman_source.public_id, card_id, True)
+            
 
         return {
             "card_name": card_name,
@@ -46,34 +55,49 @@ class CommanderHangman:
          }
 
     def __get_card(self, query):
-        params = {'fuzzy': query}
-
-        r = requests.get('https://api.scryfall.com/cards/named', params=params)
-
-        try:
-            r.raise_for_status()
-            resp = r.json()
-            name = resp['name']
-            query = f'!"{name}"'
-        except:
-            return None
-
-        card = self.search.search_single(query)
+        card = self.search.search_named_fuzzy(query)
 
         if card is None:
             return None
 
         return card
 
-    def __init__(self, session, source, target, stats):
+    def get_stats(self):
+        return self.stats.get_source_stats(self.hangman_source.public_id)
+
+    def initialize_target(self):
+        target_commander_ids = list(x['card']['id'] for x in self.hangman_source_deck['commanders'].values())
+        
+        commander_id = None if len(target_commander_ids) == 0 else target_commander_ids[0]
+        partner_id = None if len(target_commander_ids) <= 1 else target_commander_ids[1]
+
+        self.hangman_target.bulk_edit({}, {}, {})
+        self.hangman_target.commanders.set((commander_id, partner_id))
+        self.hangman_target_deck = self.hangman_target.get()
+
+    def __init__(self, session, guild_id, source, target, expiration, owner, channel_id):
+        self.search = MoxfieldSearchAPI(session)
         self.hangman_source = MoxfieldSpecificDeckAPI(source, session)
         self.hangman_target = MoxfieldSpecificDeckAPI(target, session)
         self.hangman_source_deck = self.hangman_source.get()
-        self.search = MoxfieldSearchAPI(session)
-        self.stats = stats
-        pass
+        self.hangman_target_deck = self.hangman_target.get()
+        self.guild_id = guild_id
+        self.expiration = expiration
+        self.owner = owner
+        self.channel_id = channel_id
+        
 
 class CommanderHangmanStats:
+
+    def get_rank(self, source_id):
+        cur = self.connection.cursor()
+        guesses = cur.execute("SELECT discord_id, COUNT(*) AS guesses FROM HangmanStats WHERE correct=1 AND source_id=? GROUP BY discord_id ORDER BY guesses DESC LIMIT 10", (source_id, ))
+        return {x: y for x, y in guesses}
+
+    def get_rank_all_time(self):
+        cur = self.connection.cursor()
+        guesses = cur.execute("SELECT discord_id, COUNT(*) AS guesses FROM HangmanStats WHERE correct=1 GROUP BY discord_id ORDER BY guesses DESC LIMIT 10")
+        return {x: y for x, y in guesses}
 
     def get_player_stats(self, discord_id, source_id):
         cur = self.connection.cursor()
@@ -99,6 +123,28 @@ class CommanderHangmanStats:
         
         return stats
 
+    def drop_player_stats(self, discord_id):
+        query = "DELETE FROM HangmanStats WHERE discord_id=?"
+        self.connection.cursor().execute(query, (discord_id, ))
+        self.connection.commit()
+
+    def get_source_stats(self, source_id):
+        cur = self.connection.cursor()
+        res_guesses = cur.execute("SELECT COUNT(*) FROM HangmanStats WHERE source_id=?", (source_id, ))
+        guesses = int(res_guesses.fetchone()[0])
+
+        corr_gueses = cur.execute("SELECT COUNT(*) FROM HangmanStats WHERE source_id=? AND correct=1", (source_id, ))
+        correct = int(corr_gueses.fetchone()[0])
+
+        rank = self.get_rank(source_id)
+        top = list(itertools.islice(rank, 1))
+
+        return {
+            "guesses": guesses,
+            "correct": correct,
+            "top_scorer_id": top[0] if len(top) != 0 else None
+        }
+
     def add(self, discord_id, source_id, card_id, correct):
         query = "INSERT INTO HangmanStats values (?, ?, ?, ?)"
         self.connection.cursor().execute(query, (discord_id, source_id, card_id, correct))
@@ -109,7 +155,13 @@ class CommanderHangmanStats:
         self.connection.cursor().execute(query)
         self.connection.commit()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self.connection.commit()
+        self.connection.close()
+
     def __init__(self, path):
         self.connection = sqlite3.connect(path)
         self.__initialize_stats()
-        pass
