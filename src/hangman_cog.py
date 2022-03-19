@@ -1,9 +1,10 @@
 import time
+import re
 import requests
 import sqlite3
 import typing
 from moxfield.auth import MoxfieldAuth
-from moxfield.decks import MoxfieldDeckAPI, MoxfieldSpecificDeckAPI
+from moxfield.decks import MoxfieldDeckAPI
 from discord import Embed, Member
 from discord.ext import tasks, commands
 from hangman import CommanderHangman, CommanderHangmanStats
@@ -26,6 +27,9 @@ class CommanderHangmanCog(commands.Cog):
         moxfield_deck = hangman_session.hangman_source if use_source else hangman_session.hangman_target
         source_deck_name = hangman_session.hangman_source_deck['name']
 
+        source_cards = sum(hangman_session.hangman_source_deck['mainboard'][card_name]['quantity'] for card_name in hangman_session.hangman_source_deck['mainboard'])
+        target_cards = sum(hangman_session.hangman_target_deck['mainboard'][card_name]['quantity'] for card_name in hangman_session.hangman_target_deck['mainboard'])
+
         embed = Embed(
             title=f'Commander Hangman: {source_deck_name}',
             url=f'https://www.moxfield.com/decks/{moxfield_deck.public_id}',
@@ -37,6 +41,7 @@ class CommanderHangmanCog(commands.Cog):
                 out = stats.get_source_stats(hangman_session.hangman_source.public_id)
                 embed.add_field(name="Guesses", value=out['guesses'])
                 embed.add_field(name="Correct", value=out['correct'])
+                embed.add_field(name="Cards Guessed", value=f"{target_cards}/{source_cards}")
                 if out['top_scorer_id'] is not None:
                     embed.add_field(name="Top Guesser", value=self.bot.get_user(int(out['top_scorer_id'])))
 
@@ -47,7 +52,7 @@ class CommanderHangmanCog(commands.Cog):
 
         return embed
 
-    @commands.group(name='hg', invoke_without_command=True, help="View the current Commander Hangman game.")
+    @commands.group(name='hg', invoke_without_command=True, help="Commander Hangman - the game where you guess someone else's jank.")
     @guild_only()
     async def hangman(self, ctx):
         guild_id = ctx.guild.id
@@ -62,12 +67,15 @@ class CommanderHangmanCog(commands.Cog):
 
     @hangman.command(name='start',  help='Start a new Commander Hangman game with the given decklist.')
     @guild_only()
-    async def hangman_start(self, ctx, moxfield_id: str):
+    async def hangman_start(self, ctx, moxfield_id: str, seconds: typing.Optional[int]):
         guild_id = ctx.guild.id
         author = ctx.message.author
         author_id = ctx.message.author.id
         channel_id = ctx.message.channel.id
         await ctx.message.delete()
+
+        if (match := re.match(r'https?://www.moxfield.com/decks/([^/?]+)', moxfield_id)) is not None:
+            moxfield_id = match.group(1)
 
         # Do not allow starting a new game if a current one is in progress.
         if self.guild_games[guild_id] is not None:
@@ -81,14 +89,20 @@ class CommanderHangmanCog(commands.Cog):
                 await ctx.send("This deck was played already.")
                 return
     
+        if seconds is not None and not ctx.message.author.guild_permissions.administrator:
+            seconds = 28800
+        
+        if seconds is None:
+            seconds = 28800
+
         # Initialize the target and cache context:
-        self.guild_games.start(guild_id, moxfield_id, ctx.message.channel.id, author_id)
+        self.guild_games.start(guild_id, moxfield_id, ctx.message.channel.id, author_id, seconds)
 
         # Send success message:
         embed = self.build_embed(self.guild_games[guild_id], f'{author.name} started a new Commander Hangman game! Type `!hg guess <card name>` to guess!', with_expires = True)
         await ctx.send(embed=embed)
 
-    @hangman.command(name='guess',  help='Guesses a card name.')
+    @hangman.command(name='guess',  help='Submit a card name guess.')
     @guild_only()
     async def hangman_guess(self, ctx, *, card_name: str):
         guild_id = ctx.guild.id
@@ -115,12 +129,12 @@ class CommanderHangmanCog(commands.Cog):
             await ctx.message.add_reaction('❓')
             return
 
-        card_name = guess_results['card_name']
+        if self.guild_games[guild_id].is_finished():
+            embed = self.build_embed(self.guild_games[guild_id], 'Incredible! You\'ve guessed the entire deck! Congratulations to the winner!', with_stats=True, use_source=True)
+            await ctx.send(embed=embed)
+            del self.guild_games[guild_id]
 
-        if guess_results['card_name'].lower() != card_name.lower():
-            await ctx.send(f'Guessed closest card: "{card_name}"')
-
-    @hangman.command(name='stop',  help='Stops the currently running Commander Hangman game (administrator only).')
+    @hangman.command(name='stop',  help='Stop the currently running Commander Hangman game (administrator only).')
     @guild_only()
     @admin_only()
     async def hangman_stop(self, ctx):
@@ -133,7 +147,7 @@ class CommanderHangmanCog(commands.Cog):
         await ctx.send(embed=embed)
         del self.guild_games[guild_id]
 
-    @hangman.command(name='stats', help='Gets the stats of a player.')
+    @hangman.command(name='stats', help='Get the stats of a player.')
     @guild_only()
     async def hangman_stats(self, ctx, *, member: typing.Optional[Member]):
         guild_id = ctx.guild.id
@@ -217,8 +231,8 @@ class CommanderHangmanGuildContext:
         
         return target_id
 
-    def start(self, guild_id, source_id, channel_id, owner_id):
-        self[guild_id] = CommanderHangman(self.session, guild_id, source_id, self.get_target_id(guild_id), int(time.time()) + 3600, owner_id, channel_id)
+    def start(self, guild_id, source_id, channel_id, owner_id, seconds = 28800):
+        self[guild_id] = CommanderHangman(self.session, guild_id, source_id, self.get_target_id(guild_id), int(time.time()) + seconds, owner_id, channel_id)
         self[guild_id].initialize_target()
 
     def stats(self, guild_id):
