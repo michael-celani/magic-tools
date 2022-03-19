@@ -42,7 +42,7 @@ class CommanderHangman:
         if guess_unique:
             quantity = self.hangman_source_deck['mainboard'][card_name]['quantity']
             self.hangman_target.mainboard.set(card_id, quantity)
-            self.hangman_target_deck['mainboard'][card_name] = {}
+            self.hangman_target_deck['mainboard'][card_name] = {'quantity': quantity}
 
             with CommanderHangmanStats(stats_path) as stats:
                 stats.add(discord_id, self.hangman_source.public_id, card_id, True)
@@ -64,6 +64,11 @@ class CommanderHangman:
 
     def get_stats(self):
         return self.stats.get_source_stats(self.hangman_source.public_id)
+
+    def is_finished(self):
+        source = sum(self.hangman_source_deck['mainboard'][card_name]['quantity'] for card_name in self.hangman_source_deck['mainboard'])
+        target = sum(self.hangman_target_deck['mainboard'][card_name]['quantity'] for card_name in self.hangman_target_deck['mainboard'])
+        return source == target
 
     def initialize_target(self):
         target_commander_ids = list(x['card']['id'] for x in self.hangman_source_deck['commanders'].values())
