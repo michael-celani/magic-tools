@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM python:3.10.2-bullseye
+FROM python:3.11.0rc1-bullseye
 WORKDIR /app
 
 RUN pip3 install python-dateutil requests moxfield==0.4.2 discord.py python-dotenv 
